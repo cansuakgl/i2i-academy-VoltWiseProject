@@ -1,0 +1,85 @@
+# Operating system
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userossc
+*.sln.docstates
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+!.env.template
+*.local
+
+# Java / Spring Boot
+.gradle/
+build/
+out/
+target/
+bin/
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# Node / frontend
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.next/
+.nuxt/
+.svelte-kit/
+dist/
+coverage/
+vite.svg
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Test artifacts
+.coverage
+htmlcov/
+
+# Docker and containers
+.docker/
+
+# Local data and temporary files
+tmp/
+temp/
+*.tmp
+
+# Project-specific runtime files
+uploads/
+generated/
+
+# ignore personal notes 
+NOTES.md

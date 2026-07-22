@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: wattsmart-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/wattsmart}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: wattsmart
+        jdbc:
+          time_zone: UTC
+  jackson:
+    time-zone: UTC
+
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  kafka:
+    enabled: ${KAFKA_ENABLED:false}
+    topics:
+      home-registration: ${KAFKA_HOME_REGISTRATION_TOPIC:wattsmart.home-registration.v1}

@@ -14,6 +14,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -53,4 +54,10 @@ public class HomeBillingAccount extends AuditableEntity {
 
     @Column(name = "penalty_active", nullable = false)
     private boolean penaltyActive;
+
+    @Column(name = "last_telemetry_received_at")
+    private OffsetDateTime lastTelemetryReceivedAt;
+
+    @Column(name = "last_rollup_at")
+    private OffsetDateTime lastRollupAt;
 }

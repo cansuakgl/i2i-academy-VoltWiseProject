@@ -237,7 +237,9 @@ public class HomeRegistrationService {
                         appliance.getId(),
                         appliance.getApplianceCode(),
                         appliance.getName(),
-                        appliance.getApplianceTypeProfile().getCode()))
+                        appliance.getApplianceTypeProfile().getCode(),
+                        appliance.getApplianceTypeProfile().getAverageWatts(),
+                        appliance.getSafeWattLimit()))
                 .toList();
 
         return new HomeRegistrationEvent(

@@ -72,6 +72,20 @@ htmlcov/
 # Docker and containers
 .docker/
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 # Local data and temporary files
 tmp/
 temp/
@@ -83,3 +97,4 @@ generated/
 
 # ignore personal notes 
 NOTES.md
+PERSONAL_NOTES.md

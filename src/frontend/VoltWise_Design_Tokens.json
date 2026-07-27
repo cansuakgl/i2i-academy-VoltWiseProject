@@ -1,0 +1,64 @@
+{
+  "light": {
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "surfaceAlt": "#FFF8E8",
+    "card": "#FFFFFF",
+    "border": "#E8EAF2",
+
+    "textPrimary": "#1A1218",
+    "textSecondary": "#606887",
+
+    "primary": "#626FD4",
+    "primaryHover": "#4E5CC8",
+
+    "secondary": "#42E8DB",
+    "secondaryHover": "#22D7CA",
+
+    "accent": "#F278B6",
+    "accentHover": "#E85AA3",
+
+    "success": "#32C875",
+    "warning": "#F7B733",
+    "error": "#F05A5A",
+    "info": "#42E8DB"
+  },
+
+  "dark": {
+    "background": "#0D1018",
+    "surface": "#171C29",
+    "surfaceAlt": "#20273A",
+    "card": "#1E2435",
+    "border": "#2F3950",
+
+    "textPrimary": "#F7F8FB",
+    "textSecondary": "#B8C2DA",
+
+    "primary": "#8C96FF",
+    "primaryHover": "#A4ADFF",
+
+    "secondary": "#62FFF0",
+    "secondaryHover": "#84FFF5",
+
+    "accent": "#FF9BD3",
+    "accentHover": "#FFB2DE",
+
+    "success": "#4ADE80",
+    "warning": "#FFD166",
+    "error": "#FF7A7A",
+    "info": "#62FFF0"
+  },
+
+  "charts": {
+    "gridImport": "#626FD4",
+    "gridExport": "#42E8DB",
+    "solar": "#FFD54A",
+    "battery": "#4ADE80",
+    "home": "#F278B6",
+    "ev": "#9D7CFF",
+    "wind": "#6DCFF6",
+    "warning": "#F7B733",
+    "critical": "#F05A5A",
+    "offline": "#94A3B8"
+  }
+}

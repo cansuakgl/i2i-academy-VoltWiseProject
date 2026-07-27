@@ -1,0 +1,125 @@
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee /var/log/wattsmart-user-data.log | logger -t wattsmart-user-data -s 2>/dev/console) 2>&1
+
+dnf update -y
+dnf install -y docker awscli amazon-ssm-agent
+systemctl enable --now docker
+systemctl enable --now amazon-ssm-agent || true
+
+mkdir -p /opt/wattsmart
+cd /opt/wattsmart
+
+aws secretsmanager get-secret-value \
+  --region ${aws_region} \
+  --secret-id ${secret_id} \
+  --query SecretString \
+  --output text > /opt/wattsmart/app-secret.json
+
+DB_PASSWORD=$(python3 -c "import json; print(json.load(open('/opt/wattsmart/app-secret.json')).get('DB_PASSWORD', ''))")
+GEMINI_API_KEY=$(python3 -c "import json; print(json.load(open('/opt/wattsmart/app-secret.json')).get('GEMINI_API_KEY', ''))")
+RESEND_API_KEY=$(python3 -c "import json; print(json.load(open('/opt/wattsmart/app-secret.json')).get('RESEND_API_KEY', ''))")
+
+cat > /opt/wattsmart/backend.env <<EOF
+SERVER_PORT=8080
+SPRING_PROFILES_ACTIVE=core
+DB_URL=${db_url}
+DB_USERNAME=${db_username}
+DB_PASSWORD=$${DB_PASSWORD}
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+IGNITE_HOST=ignite
+IGNITE_PORT=10800
+EMAIL_PROVIDER=${email_provider}
+EMAIL_FROM=${email_from}
+GEMINI_MODEL=${gemini_model}
+GEMINI_API_KEY=$${GEMINI_API_KEY}
+RESEND_API_KEY=$${RESEND_API_KEY}
+EOF
+
+cat > /opt/wattsmart/simulator.env <<EOF
+SPRING_PROFILES_ACTIVE=simulator
+FLYWAY_ENABLED=false
+DB_URL=${db_url}
+DB_USERNAME=${db_username}
+DB_PASSWORD=$${DB_PASSWORD}
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+IGNITE_HOST=ignite
+IGNITE_PORT=10800
+EOF
+
+chmod 600 /opt/wattsmart/*.env /opt/wattsmart/app-secret.json
+
+registry="$(echo "${backend_image}" | cut -d/ -f1)"
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin "$${registry}"
+
+docker network create wattsmart || true
+
+docker rm -f kafka ignite backend simulator || true
+
+docker run -d \
+  --name kafka \
+  --restart unless-stopped \
+  --network wattsmart \
+  -e KAFKA_NODE_ID=1 \
+  -e KAFKA_PROCESS_ROLES=broker,controller \
+  -e KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092 \
+  -e KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+  -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+  -e KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093 \
+  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
+  -e KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1 \
+  -e KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1 \
+  -e KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0 \
+  apache/kafka:3.7.0
+
+docker run -d \
+  --name ignite \
+  --restart unless-stopped \
+  --network wattsmart \
+  -e JVM_OPTS="-Xms512m -Xmx512m" \
+  apacheignite/ignite:2.16.0
+
+until docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1; do
+  echo "Waiting for Kafka to accept connections..."
+  sleep 5
+done
+
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server kafka:9092 \
+  --create \
+  --if-not-exists \
+  --topic wattsmart.home-registration.v1 \
+  --partitions 1 \
+  --replication-factor 1
+
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server kafka:9092 \
+  --create \
+  --if-not-exists \
+  --topic wattsmart.appliance-telemetry.v1 \
+  --partitions 1 \
+  --replication-factor 1
+
+sleep 20
+
+docker pull ${backend_image}
+docker pull ${simulator_image}
+
+docker run -d \
+  --name backend \
+  --restart unless-stopped \
+  --network wattsmart \
+  --env-file /opt/wattsmart/backend.env \
+  -p 8080:8080 \
+  ${backend_image}
+
+if [ "${deploy_simulator}" = "true" ]; then
+  docker run -d \
+    --name simulator \
+    --restart unless-stopped \
+    --network wattsmart \
+    --env-file /opt/wattsmart/simulator.env \
+    ${simulator_image}
+fi

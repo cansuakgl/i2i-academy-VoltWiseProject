@@ -3,8 +3,6 @@ package com.wattsmart.backend.homes.domain;
 import com.wattsmart.backend.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -18,6 +16,8 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Setter
@@ -36,8 +36,11 @@ public class HomeBillingAccount extends AuditableEntity {
     @Column(name = "current_cycle_started_on", nullable = false)
     private LocalDate currentCycleStartedOn;
 
-    @Column(name = "current_cycle_energy_kwh", nullable = false)
-    private BigDecimal currentCycleEnergyKwh = BigDecimal.ZERO;
+    @Column(name = "current_cycle_ends_on")
+    private LocalDate currentCycleEndsOn;
+
+    @Column(name = "current_cycle_usage_kwh", nullable = false)
+    private BigDecimal currentCycleUsageKwh = BigDecimal.ZERO;
 
     @Column(name = "current_cycle_base_cost_amount", nullable = false)
     private BigDecimal currentCycleBaseCostAmount = BigDecimal.ZERO;
@@ -48,12 +51,15 @@ public class HomeBillingAccount extends AuditableEntity {
     @Column(name = "total_cost_amount", nullable = false)
     private BigDecimal totalCostAmount = BigDecimal.ZERO;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "quota_state", nullable = false)
-    private QuotaState quotaState = QuotaState.NORMAL;
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "highest_milestone_reached")
+    private UsagePercentageMilestone highestMilestoneReached;
 
-    @Column(name = "penalty_active", nullable = false)
-    private boolean penaltyActive;
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "highest_milestone_stage")
+    private MilestoneStage highestMilestoneStage;
 
     @Column(name = "last_telemetry_received_at")
     private OffsetDateTime lastTelemetryReceivedAt;

@@ -9,7 +9,6 @@ public record HomeRegistrationEvent(
         UUID homeId,
         String externalKey,
         String name,
-        String contactEmail,
         String timezoneName,
         UUID tariffPlanId,
         List<RegisteredAppliance> appliances,
@@ -20,8 +19,8 @@ public record HomeRegistrationEvent(
             UUID applianceId,
             String applianceCode,
             String applianceName,
-            String typeProfileCode,
-            BigDecimal averageWatts,
+            String applianceTypeCode,
+            BigDecimal typicalWatts,
             BigDecimal safeWattLimit
     ) {
     }

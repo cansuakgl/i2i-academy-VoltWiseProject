@@ -29,14 +29,14 @@ public class TariffPlan extends AuditableEntity {
     @Column(nullable = false)
     private String name;
 
+    @Column
+    private String description;
+
     @Column(name = "currency_code", nullable = false)
     private String currencyCode;
 
     @Column(name = "base_rate_per_kwh", nullable = false)
     private BigDecimal baseRatePerKwh;
-
-    @Column(name = "penalty_rate_per_kwh", nullable = false)
-    private BigDecimal penaltyRatePerKwh;
 
     @Column(name = "effective_from", nullable = false)
     private LocalDate effectiveFrom;
@@ -44,6 +44,6 @@ public class TariffPlan extends AuditableEntity {
     @Column(name = "effective_to")
     private LocalDate effectiveTo;
 
-    @Column(name = "is_default", nullable = false)
-    private boolean defaultPlan;
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
 }

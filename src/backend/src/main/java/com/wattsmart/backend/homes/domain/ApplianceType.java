@@ -15,8 +15,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "appliance_type_profiles", schema = "wattsmart")
-public class ApplianceTypeProfile extends AuditableEntity {
+@Table(name = "appliance_types", schema = "wattsmart")
+public class ApplianceType extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -28,15 +28,15 @@ public class ApplianceTypeProfile extends AuditableEntity {
     @Column(name = "display_name", nullable = false)
     private String displayName;
 
-    @Column(name = "average_watts", nullable = false)
-    private BigDecimal averageWatts;
+    @Column
+    private String description;
 
-    @Column(name = "default_safe_watt_limit", nullable = false)
+    @Column(name = "typical_watts")
+    private BigDecimal typicalWatts;
+
+    @Column(name = "default_safe_watt_limit")
     private BigDecimal defaultSafeWattLimit;
 
-    @Column(name = "allowed_deviation_pct", nullable = false)
-    private BigDecimal allowedDeviationPct;
-
-    @Column(name = "default_anomaly_cycle_threshold", nullable = false)
-    private short defaultAnomalyCycleThreshold;
+    @Column(name = "peak_watt_limit")
+    private BigDecimal peakWattLimit;
 }

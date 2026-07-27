@@ -1,7 +1,6 @@
 package com.wattsmart.backend.homes.domain;
 
-public enum QuotaState {
-    NORMAL,
+public enum MilestoneStage {
     WARNING,
-    BREACHED
+    PENALTY
 }

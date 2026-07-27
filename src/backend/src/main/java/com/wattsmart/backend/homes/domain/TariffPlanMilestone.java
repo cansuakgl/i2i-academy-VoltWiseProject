@@ -5,10 +5,14 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -18,42 +22,27 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @Setter
 @Entity
-@Table(name = "homes", schema = "wattsmart")
-public class Home extends AuditableEntity {
+@Table(name = "tariff_plan_milestones", schema = "wattsmart")
+public class TariffPlanMilestone extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "external_key", nullable = false)
-    private String externalKey;
-
-    @Column(nullable = false)
-    private String name;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tariff_plan_id", nullable = false)
+    private TariffPlan tariffPlan;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(nullable = false)
-    private HomeStatus status = HomeStatus.ACTIVE;
+    private UsagePercentageMilestone milestone;
 
-    @Column(name = "address_line_1")
-    private String addressLine1;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(nullable = false)
+    private MilestoneStage stage;
 
-    @Column(name = "address_line_2")
-    private String addressLine2;
-
-    @Column
-    private String city;
-
-    @Column
-    private String region;
-
-    @Column(name = "postal_code")
-    private String postalCode;
-
-    @Column(name = "country_code")
-    private String countryCode;
-
-    @Column(name = "timezone_name", nullable = false)
-    private String timezoneName;
+    @Column(name = "penalty_multiplier")
+    private BigDecimal penaltyMultiplier;
 }

@@ -10,6 +10,6 @@ public record HomeRegistrationResponse(
         UUID tariffPlanId,
         int applianceCount,
         List<UUID> applianceIds,
-        UUID ownerMembershipId
+        UUID membershipId
 ) {
 }

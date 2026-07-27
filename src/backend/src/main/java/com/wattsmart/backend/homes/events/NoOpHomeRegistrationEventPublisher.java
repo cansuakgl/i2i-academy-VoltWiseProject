@@ -1,12 +1,12 @@
 package com.wattsmart.backend.homes.events;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@ConditionalOnMissingBean(HomeRegistrationEventPublisher.class)
+@ConditionalOnProperty(name = "app.kafka.enabled", havingValue = "false", matchIfMissing = true)
 public class NoOpHomeRegistrationEventPublisher implements HomeRegistrationEventPublisher {
 
     @Override

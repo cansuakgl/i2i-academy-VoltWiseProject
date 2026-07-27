@@ -1,7 +1,8 @@
 package com.wattsmart.backend.homes.api.dto;
 
 import com.wattsmart.backend.homes.domain.HomeStatus;
-import com.wattsmart.backend.homes.domain.QuotaState;
+import com.wattsmart.backend.homes.domain.MilestoneStage;
+import com.wattsmart.backend.homes.domain.UsagePercentageMilestone;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -16,7 +17,6 @@ public record HomeStatusResponse(
             UUID homeId,
             String externalKey,
             String name,
-            String contactEmail,
             HomeStatus status,
             String timezoneName,
             BillingStatus billing,
@@ -26,12 +26,14 @@ public record HomeStatusResponse(
 
     public record BillingStatus(
             LocalDate currentCycleStartedOn,
-            BigDecimal currentCycleEnergyKwh,
+            LocalDate currentCycleEndsOn,
+            BigDecimal currentCycleUsageKwh,
             BigDecimal currentCycleBaseCostAmount,
             BigDecimal currentCyclePenaltyCostAmount,
             BigDecimal totalCostAmount,
-            QuotaState quotaState,
-            boolean penaltyActive,
+            UsagePercentageMilestone highestMilestoneReached,
+            MilestoneStage highestMilestoneStage,
+            BigDecimal currentTotalWatts,
             OffsetDateTime lastTelemetryReceivedAt,
             OffsetDateTime lastRollupAt
     ) {
@@ -41,12 +43,15 @@ public record HomeStatusResponse(
             UUID applianceId,
             String applianceCode,
             String name,
-            String typeProfileCode,
+            String typeCode,
             String typeDisplayName,
-            BigDecimal averageWatts,
+            BigDecimal typicalWatts,
             BigDecimal safeWattLimit,
-            BigDecimal allowedDeviationPct,
-            Short anomalyCycleThreshold,
+            BigDecimal latestWattage,
+            boolean aboveSafeLimit,
+            int consecutiveBreachCount,
+            boolean anomalyActive,
+            OffsetDateTime lastCapturedAt,
             boolean active
     ) {
     }

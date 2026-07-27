@@ -1,34 +1,33 @@
 package com.wattsmart.backend.homes.service;
 
 import com.wattsmart.backend.auth.domain.AppUser;
-import com.wattsmart.backend.auth.repository.AppUserRepository;
 import com.wattsmart.backend.common.service.BadRequestException;
 import com.wattsmart.backend.common.service.ResourceNotFoundException;
 import com.wattsmart.backend.homes.api.dto.HomeRegistrationRequest;
 import com.wattsmart.backend.homes.api.dto.HomeRegistrationResponse;
 import com.wattsmart.backend.homes.domain.Appliance;
-import com.wattsmart.backend.homes.domain.ApplianceTypeProfile;
+import com.wattsmart.backend.homes.domain.ApplianceType;
 import com.wattsmart.backend.homes.domain.Home;
 import com.wattsmart.backend.homes.domain.HomeBillingAccount;
-import com.wattsmart.backend.homes.domain.HomeBillingConfig;
+import com.wattsmart.backend.homes.domain.HomeTariffPlan;
 import com.wattsmart.backend.homes.domain.HomeStatus;
 import com.wattsmart.backend.homes.domain.HomeUserMembership;
-import com.wattsmart.backend.homes.domain.MembershipRole;
 import com.wattsmart.backend.homes.domain.TariffPlan;
 import com.wattsmart.backend.homes.events.HomeRegistrationEvent;
 import com.wattsmart.backend.homes.events.HomeRegistrationEvent.RegisteredAppliance;
 import com.wattsmart.backend.homes.events.HomeRegistrationEventPublisher;
 import com.wattsmart.backend.homes.repository.ApplianceRepository;
-import com.wattsmart.backend.homes.repository.ApplianceTypeProfileRepository;
+import com.wattsmart.backend.homes.repository.ApplianceTypeRepository;
 import com.wattsmart.backend.homes.repository.HomeBillingAccountRepository;
-import com.wattsmart.backend.homes.repository.HomeBillingConfigRepository;
 import com.wattsmart.backend.homes.repository.HomeRepository;
+import com.wattsmart.backend.homes.repository.HomeTariffPlanRepository;
 import com.wattsmart.backend.homes.repository.HomeUserMembershipRepository;
 import com.wattsmart.backend.homes.repository.TariffPlanRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,52 +42,51 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class HomeRegistrationService {
 
-    private static final BigDecimal DEFAULT_WARNING_THRESHOLD = new BigDecimal("80.00");
-    private static final BigDecimal DEFAULT_CRITICAL_THRESHOLD = new BigDecimal("100.00");
     private static final short DEFAULT_BILLING_CYCLE_START_DAY = 1;
 
     private final HomeRepository homeRepository;
     private final TariffPlanRepository tariffPlanRepository;
-    private final ApplianceTypeProfileRepository applianceTypeProfileRepository;
-    private final HomeBillingConfigRepository homeBillingConfigRepository;
+    private final ApplianceTypeRepository applianceTypeRepository;
+    private final HomeTariffPlanRepository homeTariffPlanRepository;
     private final HomeBillingAccountRepository homeBillingAccountRepository;
     private final ApplianceRepository applianceRepository;
     private final HomeUserMembershipRepository homeUserMembershipRepository;
-    private final AppUserRepository appUserRepository;
     private final HomeRegistrationEventPublisher eventPublisher;
+    private final HomeLiveStateSyncService homeLiveStateSyncService;
 
     @Transactional
-    public HomeRegistrationResponse register(HomeRegistrationRequest request) {
+    public HomeRegistrationResponse register(HomeRegistrationRequest request, AppUser user) {
         validateRequest(request);
 
         TariffPlan tariffPlan = resolveTariffPlan(request);
-        Map<String, ApplianceTypeProfile> typeProfiles = resolveTypeProfiles(request);
+        Map<String, ApplianceType> applianceTypes = resolveApplianceTypes(request);
 
         Home home = buildHome(request);
         homeRepository.save(home);
 
-        HomeBillingConfig billingConfig = buildBillingConfig(request, home, tariffPlan);
-        homeBillingConfigRepository.save(billingConfig);
+        HomeTariffPlan homeTariffPlan = buildHomeTariffPlan(request, home, tariffPlan);
+        homeTariffPlanRepository.save(homeTariffPlan);
 
-        HomeBillingAccount billingAccount = buildBillingAccount(home, billingConfig);
+        HomeBillingAccount billingAccount = buildBillingAccount(home, homeTariffPlan);
         homeBillingAccountRepository.save(billingAccount);
 
-        List<Appliance> appliances = request.appliances().stream()
-                .map(item -> buildAppliance(home, item, typeProfiles.get(item.typeProfileCode())))
+        List<Appliance> appliances = appliancesOrEmpty(request).stream()
+                .map(item -> buildAppliance(home, item, applianceTypes.get(item.typeCode())))
                 .toList();
-        applianceRepository.saveAll(appliances);
+        List<Appliance> savedAppliances = applianceRepository.saveAll(appliances);
 
-        HomeUserMembership membership = createOwnerMembershipIfPresent(home, request);
+        HomeUserMembership membership = createMembership(home, user);
+        homeLiveStateSyncService.syncHome(home, billingAccount, savedAppliances);
 
-        eventPublisher.publish(buildEvent(home, tariffPlan, appliances, request));
+        eventPublisher.publish(buildEvent(home, tariffPlan, savedAppliances, request));
 
         return new HomeRegistrationResponse(
                 home.getId(),
                 home.getExternalKey(),
                 home.getName(),
                 tariffPlan.getId(),
-                appliances.size(),
-                appliances.stream().map(Appliance::getId).toList(),
+                savedAppliances.size(),
+                savedAppliances.stream().map(Appliance::getId).toList(),
                 membership != null ? membership.getId() : null
         );
     }
@@ -99,7 +97,7 @@ public class HomeRegistrationService {
         }
 
         Set<String> applianceCodes = new HashSet<>();
-        for (HomeRegistrationRequest.ApplianceRegistrationRequest appliance : request.appliances()) {
+        for (HomeRegistrationRequest.ApplianceRegistrationRequest appliance : appliancesOrEmpty(request)) {
             if (!applianceCodes.add(appliance.applianceCode())) {
                 throw new BadRequestException("Duplicate appliance code in request: " + appliance.applianceCode());
             }
@@ -107,40 +105,33 @@ public class HomeRegistrationService {
     }
 
     private TariffPlan resolveTariffPlan(HomeRegistrationRequest request) {
-        UUID tariffPlanId = request.billing().tariffPlanId();
-        if (tariffPlanId != null) {
-            return tariffPlanRepository.findById(tariffPlanId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Tariff plan not found: " + tariffPlanId));
-        }
-
-        return tariffPlanRepository.findByDefaultPlanTrue()
-                .orElseThrow(() -> new ResourceNotFoundException("No default tariff plan is configured."));
+        return tariffPlanRepository.findById(request.billing().tariffPlanId())
+                .orElseThrow(() -> new ResourceNotFoundException("Tariff plan not found: " + request.billing().tariffPlanId()));
     }
 
-    private Map<String, ApplianceTypeProfile> resolveTypeProfiles(HomeRegistrationRequest request) {
-        List<String> codes = request.appliances().stream()
-                .map(HomeRegistrationRequest.ApplianceRegistrationRequest::typeProfileCode)
+    private Map<String, ApplianceType> resolveApplianceTypes(HomeRegistrationRequest request) {
+        List<String> codes = appliancesOrEmpty(request).stream()
+                .map(HomeRegistrationRequest.ApplianceRegistrationRequest::typeCode)
                 .distinct()
                 .toList();
 
-        Map<String, ApplianceTypeProfile> profilesByCode = new HashMap<>();
-        applianceTypeProfileRepository.findByCodeIn(codes)
-                .forEach(profile -> profilesByCode.put(profile.getCode(), profile));
+        Map<String, ApplianceType> applianceTypesByCode = new HashMap<>();
+        applianceTypeRepository.findByCodeIn(codes)
+                .forEach(type -> applianceTypesByCode.put(type.getCode(), type));
 
         List<String> missingCodes = codes.stream()
-                .filter(code -> !profilesByCode.containsKey(code))
+                .filter(code -> !applianceTypesByCode.containsKey(code))
                 .toList();
         if (!missingCodes.isEmpty()) {
-            throw new ResourceNotFoundException("Unknown appliance type profile codes: " + String.join(", ", missingCodes));
+            throw new ResourceNotFoundException("Unknown appliance type codes: " + String.join(", ", missingCodes));
         }
-        return profilesByCode;
+        return applianceTypesByCode;
     }
 
     private Home buildHome(HomeRegistrationRequest request) {
         Home home = new Home();
-        home.setExternalKey(request.externalKey());
+        home.setExternalKey(resolveExternalKey(request));
         home.setName(request.name());
-        home.setContactEmail(request.contactEmail());
         home.setStatus(HomeStatus.ACTIVE);
         home.setAddressLine1(request.addressLine1());
         home.setAddressLine2(request.addressLine2());
@@ -152,76 +143,53 @@ public class HomeRegistrationService {
         return home;
     }
 
-    private HomeBillingConfig buildBillingConfig(
+    private HomeTariffPlan buildHomeTariffPlan(
             HomeRegistrationRequest request,
             Home home,
             TariffPlan tariffPlan
     ) {
-        HomeBillingConfig billingConfig = new HomeBillingConfig();
-        billingConfig.setHome(home);
-        billingConfig.setTariffPlan(tariffPlan);
-        billingConfig.setMonthlyBudgetAmount(request.billing().monthlyBudgetAmount());
-        billingConfig.setMonthlyEnergyQuotaKwh(request.billing().monthlyEnergyQuotaKwh());
-        billingConfig.setQuotaWarningThresholdPct(defaultIfNull(
-                request.billing().quotaWarningThresholdPct(),
-                DEFAULT_WARNING_THRESHOLD
-        ));
-        billingConfig.setQuotaCriticalThresholdPct(defaultIfNull(
-                request.billing().quotaCriticalThresholdPct(),
-                DEFAULT_CRITICAL_THRESHOLD
-        ));
-        billingConfig.setBillingCycleStartDay(request.billing().billingCycleStartDay() != null
+        HomeTariffPlan homeTariffPlan = new HomeTariffPlan();
+        homeTariffPlan.setHome(home);
+        homeTariffPlan.setTariffPlan(tariffPlan);
+        homeTariffPlan.setMonthlyUsageLimitKwh(request.billing().monthlyUsageLimitKwh());
+        homeTariffPlan.setBillingCycleStartDay(request.billing().billingCycleStartDay() != null
                 ? request.billing().billingCycleStartDay()
                 : DEFAULT_BILLING_CYCLE_START_DAY);
-        return billingConfig;
+        homeTariffPlan.setEffectiveFrom(LocalDate.now(ZoneId.of(home.getTimezoneName())));
+        return homeTariffPlan;
     }
 
-    private HomeBillingAccount buildBillingAccount(Home home, HomeBillingConfig billingConfig) {
+    private HomeBillingAccount buildBillingAccount(Home home, HomeTariffPlan homeTariffPlan) {
         HomeBillingAccount billingAccount = new HomeBillingAccount();
         billingAccount.setHome(home);
-        billingAccount.setCurrentCycleStartedOn(resolveCycleStart(home.getTimezoneName(), billingConfig.getBillingCycleStartDay()));
+        billingAccount.setCurrentCycleStartedOn(resolveCycleStart(home.getTimezoneName(), homeTariffPlan.getBillingCycleStartDay()));
         return billingAccount;
     }
 
     private Appliance buildAppliance(
             Home home,
             HomeRegistrationRequest.ApplianceRegistrationRequest request,
-            ApplianceTypeProfile profile
+            ApplianceType applianceType
     ) {
         Appliance appliance = new Appliance();
         appliance.setHome(home);
-        appliance.setApplianceTypeProfile(profile);
+        appliance.setApplianceType(applianceType);
         appliance.setApplianceCode(request.applianceCode());
         appliance.setName(request.name());
         appliance.setManufacturer(request.manufacturer());
-        appliance.setModelNumber(request.modelNumber());
+        appliance.setModelName(request.modelName());
         appliance.setNominalWattage(request.nominalWattage());
-        appliance.setSafeWattLimit(defaultIfNull(request.safeWattLimit(), profile.getDefaultSafeWattLimit()));
-        appliance.setAllowedDeviationPct(defaultIfNull(request.allowedDeviationPct(), profile.getAllowedDeviationPct()));
-        appliance.setAnomalyCycleThreshold(request.anomalyCycleThreshold() != null
-                ? request.anomalyCycleThreshold()
-                : profile.getDefaultAnomalyCycleThreshold());
+        appliance.setSafeWattLimit(defaultIfNull(request.safeWattLimit(), applianceType.getDefaultSafeWattLimit()));
         appliance.setDisplayOrder(request.displayOrder() != null ? request.displayOrder() : (short) 0);
         appliance.setInstalledAt(request.installedAt());
         appliance.setActive(true);
         return appliance;
     }
 
-    private HomeUserMembership createOwnerMembershipIfPresent(Home home, HomeRegistrationRequest request) {
-        if (request.ownerUserId() == null) {
-            return null;
-        }
-
-        AppUser user = appUserRepository.findById(request.ownerUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + request.ownerUserId()));
-
+    private HomeUserMembership createMembership(Home home, AppUser user) {
         HomeUserMembership membership = new HomeUserMembership();
         membership.setHome(home);
         membership.setUser(user);
-        membership.setMembershipRole(request.ownerMembershipRole() != null
-                ? request.ownerMembershipRole()
-                : MembershipRole.OWNER);
-        membership.setPrimary(request.primaryOwner() == null || request.primaryOwner());
         membership.setAcceptedAt(OffsetDateTime.now());
         return homeUserMembershipRepository.save(membership);
     }
@@ -237,8 +205,8 @@ public class HomeRegistrationService {
                         appliance.getId(),
                         appliance.getApplianceCode(),
                         appliance.getName(),
-                        appliance.getApplianceTypeProfile().getCode(),
-                        appliance.getApplianceTypeProfile().getAverageWatts(),
+                        appliance.getApplianceType().getCode(),
+                        appliance.getApplianceType().getTypicalWatts(),
                         appliance.getSafeWattLimit()))
                 .toList();
 
@@ -246,7 +214,6 @@ public class HomeRegistrationService {
                 home.getId(),
                 home.getExternalKey(),
                 home.getName(),
-                request.contactEmail(),
                 home.getTimezoneName(),
                 tariffPlan.getId(),
                 eventAppliances,
@@ -263,5 +230,16 @@ public class HomeRegistrationService {
 
     private BigDecimal defaultIfNull(BigDecimal value, BigDecimal fallback) {
         return value != null ? value : fallback;
+    }
+
+    private List<HomeRegistrationRequest.ApplianceRegistrationRequest> appliancesOrEmpty(HomeRegistrationRequest request) {
+        return request.appliances() != null ? request.appliances() : Collections.emptyList();
+    }
+
+    private String resolveExternalKey(HomeRegistrationRequest request) {
+        if (request.externalKey() != null && !request.externalKey().isBlank()) {
+            return request.externalKey();
+        }
+        return "HOME-" + UUID.randomUUID();
     }
 }

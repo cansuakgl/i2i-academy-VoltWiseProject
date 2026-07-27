@@ -4,8 +4,6 @@ import com.wattsmart.backend.auth.domain.AppUser;
 import com.wattsmart.backend.common.domain.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -35,13 +33,6 @@ public class HomeUserMembership extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private AppUser user;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "membership_role", nullable = false)
-    private MembershipRole membershipRole;
-
-    @Column(name = "is_primary", nullable = false)
-    private boolean primary;
 
     @Column(name = "accepted_at")
     private OffsetDateTime acceptedAt;

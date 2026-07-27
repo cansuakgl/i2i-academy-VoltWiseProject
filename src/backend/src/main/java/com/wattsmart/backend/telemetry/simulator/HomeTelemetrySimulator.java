@@ -1,5 +1,6 @@
 package com.wattsmart.backend.telemetry.simulator;
 
+import com.wattsmart.backend.common.idempotency.IdempotencyService;
 import com.wattsmart.backend.homes.domain.Appliance;
 import com.wattsmart.backend.homes.events.HomeRegistrationEvent;
 import com.wattsmart.backend.homes.repository.ApplianceRepository;
@@ -32,6 +33,7 @@ public class HomeTelemetrySimulator {
 
     private final ApplianceRepository applianceRepository;
     private final ApplianceTelemetryEventPublisher telemetryEventPublisher;
+    private final IdempotencyService idempotencyService;
     private final Map<UUID, SimulatedHome> homes = new ConcurrentHashMap<>();
 
     @Value("${app.telemetry-simulator.fluctuation-percent}")
@@ -63,17 +65,30 @@ public class HomeTelemetrySimulator {
             autoStartup = "${app.kafka.listener.auto-startup}"
     )
     public void handleHomeRegistration(HomeRegistrationEvent event) {
-        List<SimulatedAppliance> appliances = event.appliances().stream()
-                .map(appliance -> new SimulatedAppliance(
-                        appliance.applianceId(),
-                        appliance.applianceCode(),
-                        appliance.typeProfileCode(),
-                        appliance.averageWatts(),
-                        appliance.safeWattLimit()))
-                .toList();
+        try {
+            String idempotencyKey = "home-registration:" + event.homeId() + ":" + event.registeredAt();
+            if (!idempotencyService.tryClaim(idempotencyKey)) {
+                log.info("Skipped duplicate home registration event in telemetry simulator. homeId={}", event.homeId());
+                return;
+            }
 
-        homes.put(event.homeId(), new SimulatedHome(event.homeId(), event.externalKey(), appliances));
-        log.info("Registered home in telemetry simulator. homeId={}, appliances={}", event.homeId(), appliances.size());
+            List<SimulatedAppliance> appliances = event.appliances().stream()
+                    .map(appliance -> new SimulatedAppliance(
+                            appliance.applianceId(),
+                            appliance.applianceCode(),
+                            appliance.applianceTypeCode(),
+                            appliance.typicalWatts(),
+                            appliance.safeWattLimit()))
+                    .toList();
+
+            homes.put(event.homeId(), new SimulatedHome(event.homeId(), event.externalKey(), appliances));
+            log.info("Registered home in telemetry simulator. homeId={}, appliances={}", event.homeId(), appliances.size());
+        } catch (RuntimeException exception) {
+            log.error("Home registration Kafka consume failed in telemetry simulator. homeId={}",
+                    event != null ? event.homeId() : null,
+                    exception);
+            throw exception;
+        }
     }
 
     @Scheduled(fixedDelayString = "${app.telemetry-simulator.publish-interval-ms}")
@@ -99,16 +114,16 @@ public class HomeTelemetrySimulator {
     private SimulatedAppliance toSimulatedAppliance(Appliance appliance) {
         BigDecimal safeWattLimit = appliance.getSafeWattLimit() != null
                 ? appliance.getSafeWattLimit()
-                : appliance.getApplianceTypeProfile().getDefaultSafeWattLimit();
+                : appliance.getApplianceType().getDefaultSafeWattLimit();
 
         BigDecimal averageWatts = appliance.getNominalWattage() != null
                 ? appliance.getNominalWattage()
-                : appliance.getApplianceTypeProfile().getAverageWatts();
+                : appliance.getApplianceType().getTypicalWatts();
 
         return new SimulatedAppliance(
                 appliance.getId(),
                 appliance.getApplianceCode(),
-                appliance.getApplianceTypeProfile().getCode(),
+                appliance.getApplianceType().getCode(),
                 averageWatts,
                 safeWattLimit);
     }

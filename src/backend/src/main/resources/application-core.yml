@@ -1,0 +1,19 @@
+app:
+  ignite:
+    enabled: ${IGNITE_ENABLED:true}
+  live-state:
+    store: ${LIVE_STATE_STORE:ignite}
+  idempotency:
+    store: ${IDEMPOTENCY_STORE:ignite}
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    listener:
+      auto-startup: ${KAFKA_LISTENER_AUTO_STARTUP:true}
+  telemetry-ingestion:
+    enabled: ${TELEMETRY_INGESTION_ENABLED:true}
+  telemetry-simulator:
+    enabled: ${TELEMETRY_SIMULATOR_ENABLED:false}
+  persistence:
+    enabled: ${PERSISTENCE_ENABLED:true}
+  jobs:
+    enabled: ${SCHEDULED_DB_JOBS_ENABLED:true}

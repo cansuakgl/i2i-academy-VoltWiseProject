@@ -1,0 +1,26 @@
+spring:
+  main:
+    web-application-type: none
+  kafka:
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:wattsmart-simulator}
+
+app:
+  ignite:
+    enabled: ${IGNITE_ENABLED:true}
+  live-state:
+    store: ${LIVE_STATE_STORE:in-memory}
+  idempotency:
+    store: ${IDEMPOTENCY_STORE:ignite}
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    listener:
+      auto-startup: ${KAFKA_LISTENER_AUTO_STARTUP:true}
+  telemetry-ingestion:
+    enabled: ${TELEMETRY_INGESTION_ENABLED:false}
+  telemetry-simulator:
+    enabled: ${TELEMETRY_SIMULATOR_ENABLED:true}
+  persistence:
+    enabled: ${PERSISTENCE_ENABLED:false}
+  jobs:
+    enabled: ${SCHEDULED_DB_JOBS_ENABLED:false}
